@@ -54,3 +54,10 @@ break_max_s = 300.0
 # 0 and 0 = press right away.
 reaction_min_s = 0.0
 reaction_max_s = 0.0
+# Chance (0 to 1) of a small step after a catch, before the next cast. 0 = never.
+# The step holds the first of move_keys, then the second for just as long, so you end up
+# where you started. Keep these on strafe left/right (WoW's defaults are q and e).
+move_chance = 0.0
+move_keys = "q,e"
+# Each step is held for a random time between half this and this, in milliseconds.
+move_max_ms = 300
