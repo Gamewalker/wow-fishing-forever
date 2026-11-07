@@ -65,6 +65,7 @@ class RunConfig:
     pause_max_s: float = 2.0
     key_hold_ms: int = 60
     key_hold_jitter_ms: int = 0
+    skip_bite_chance: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -170,6 +171,7 @@ def _validate(path: Path, cfg: Config) -> None:
     check(10 <= r.key_hold_ms <= 500, "run.key_hold_ms", "must be between 10 and 500")
     # More than this stops looking like a key tap; the hold is still clamped to 10..500 ms.
     check(0 <= r.key_hold_jitter_ms <= 200, "run.key_hold_jitter_ms", "must be between 0 and 200")
+    check(0.0 <= r.skip_bite_chance < 1.0, "run.skip_bite_chance", "must be in [0, 1)")
 
 
 def to_toml(cfg: Config) -> str:
