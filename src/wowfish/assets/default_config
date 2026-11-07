@@ -50,3 +50,7 @@ break_chance = 0.0
 # How long a break lasts, in seconds (picked at random in this range).
 break_min_s = 60.0
 break_max_s = 300.0
+# Random delay between hearing the splash and pressing Interact, in seconds (at most 2.0).
+# 0 and 0 = press right away.
+reaction_min_s = 0.0
+reaction_max_s = 0.0
