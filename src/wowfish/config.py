@@ -66,6 +66,9 @@ class RunConfig:
     key_hold_ms: int = 60
     key_hold_jitter_ms: int = 0
     skip_bite_chance: float = 0.0
+    break_chance: float = 0.0
+    break_min_s: float = 60.0
+    break_max_s: float = 300.0
 
 
 @dataclass(frozen=True)
@@ -172,6 +175,9 @@ def _validate(path: Path, cfg: Config) -> None:
     # More than this stops looking like a key tap; the hold is still clamped to 10..500 ms.
     check(0 <= r.key_hold_jitter_ms <= 200, "run.key_hold_jitter_ms", "must be between 0 and 200")
     check(0.0 <= r.skip_bite_chance < 1.0, "run.skip_bite_chance", "must be in [0, 1)")
+    check(0.0 <= r.break_chance <= 1.0, "run.break_chance", "must be in [0, 1]")
+    check(r.break_min_s >= 0, "run.break_min_s", "must be 0 or positive")
+    check(r.break_min_s <= r.break_max_s, "run.break_min_s", "must not exceed run.break_max_s")
 
 
 def to_toml(cfg: Config) -> str:

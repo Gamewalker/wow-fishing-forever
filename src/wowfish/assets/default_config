@@ -45,3 +45,8 @@ key_hold_jitter_ms = 0
 # Chance (0 to just below 1) of letting a heard bite go on purpose, like a person who
 # looked away. 0 = always press Interact.
 skip_bite_chance = 0.0
+# Chance (0 to 1) of taking a break after each cast ends; 0 never takes one.
+break_chance = 0.0
+# How long a break lasts, in seconds (picked at random in this range).
+break_min_s = 60.0
+break_max_s = 300.0
