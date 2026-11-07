@@ -141,6 +141,8 @@ range. If you do not see the gold gear sprite above the bobber, that means the b
 
 Optionally, after a catch the bot can take a small step and back before recasting: set `move_chance` (0 to 1, default 0 = never) in the `[run]` section. It holds the first of `move_keys` (default `"q,e"`, WoW's strafe left/right) for a random time up to `move_max_ms` (default 300), then the second for just as long, so the character ends where it started. It never moves while a bobber is out or when the game is not focused.
 
+Using a one-key fishing addon such as Better Fishing? Set `addon_mode = true` under `[game]` and the bot skips the icon search: it presses `cast_key` to cast, listens for the splash, and presses `cast_key` again to reel in. See [docs/addon-mode.md](docs/addon-mode.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

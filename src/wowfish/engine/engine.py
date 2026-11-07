@@ -33,6 +33,8 @@ LISTEN_EVERY_S = 2.0  # while waiting for the splash, say what is heard this oft
 SCORES_EVERY_S = 0.1  # ...and send each clip's peak score this often, for the GUI's graph
 SLEEP_SLICE_S = 0.1
 RESWEEP_AFTER_TIMEOUTS = 2  # icon timeouts in a row before the next cast measures the icon again
+ADDON_LOOT_S = 1.0  # addon mode has no bobber to watch: give Auto Loot this long after reeling in
+ADDON_ESCAPE_S = 3.0  # ...and after a skipped bite, let the fish get away before cast_key again
 
 
 class FishingEngine:
@@ -186,6 +188,12 @@ class FishingEngine:
             self.stats.bites_heard, self._elapsed(),
         )  # fmt: skip
         self._t_cast = now
+        if self.cfg.game.addon_mode:
+            self._listen(
+                f"Pressed {key} to cast",
+                f"Waiting for a splash; will press {key} again when I hear one",
+            )
+            return
         if self.search is not None:
             self.search.reset()
         limit = self.cfg.run.icon_timeout_s
@@ -233,14 +241,16 @@ class FishingEngine:
         self._last_box_grab = self._clock()  # the full frame just confirmed it; look again later
         thumb, box = _thumbnail(frame, m.x, m.y, m.size)
         self._emit(ev.IconFound(self._t(), thumb, box, float(m.score), int(m.size), (m.x, m.y)))
-        self.detector.reset()
-        self._best_heard = ("", -1.0)
-        self._last_listen = self._last_scores_sent = self._clock()
-        self._change(
-            State.WAIT_BITE,
+        self._listen(
             f"Found the bobber at ({m.x}, {m.y})",
             f"Waiting for a splash; will press {self.cfg.game.interact_key} when I hear one",
         )
+
+    def _listen(self, did: str, nxt: str) -> None:
+        self.detector.reset()
+        self._best_heard = ("", -1.0)
+        self._last_listen = self._last_scores_sent = self._clock()
+        self._change(State.WAIT_BITE, did, nxt)
 
     def _wait_bite(self, now: float, bites: list[Any]) -> None:
         if bites:
@@ -266,9 +276,12 @@ class FishingEngine:
                 return
             chance = self.cfg.run.skip_bite_chance
             if chance > 0 and self._rng.random() < chance:
+                if self.cfg.game.addon_mode:
+                    self._doze(ADDON_ESCAPE_S)  # pressing cast_key now would reel the fish in
                 self._miss(f"Heard the splash ({bite.score:.2f}), skipped it on purpose")
                 return
-            key = self.cfg.game.interact_key
+            addon = self.cfg.game.addon_mode
+            key = self.cfg.game.cast_key if addon else self.cfg.game.interact_key
             self._press(key, "bite")
             self._t_interact = now
             self._last_box_grab = -math.inf
@@ -276,7 +289,9 @@ class FishingEngine:
             self._change(
                 State.INTERACT,
                 f"Heard the splash ({bite.score:.2f}){waited}, pressed {key}",
-                "Waiting for the bobber to go away so Auto Loot can finish",
+                "Waiting for Auto Loot to finish"
+                if addon
+                else "Waiting for the bobber to go away so Auto Loot can finish",
             )
             return
         seen = self._track(now)
@@ -291,20 +306,27 @@ class FishingEngine:
             self._miss("No splash heard")
 
     def _after_interact(self, now: float) -> None:
+        if self.cfg.game.addon_mode:
+            if now - self._t_interact >= ADDON_LOOT_S:
+                self._caught("Reeled in")
+            return
         seen = self._track(now)
         if seen is False:
-            self.stats = ev.Stats(
-                self._t(), self.stats.casts, self.stats.catches + 1, self.stats.misses,
-                self.stats.bites_heard, self._elapsed(),
-            )  # fmt: skip
-            self._emit(ev.Caught(self._t()))
-            self._pause_then_idle("Caught something; the bobber is gone", may_move=True)
+            self._caught("Caught something; the bobber is gone")
             return
         if now - self._t_interact > self.cfg.run.loot_timeout_s:
             self._emit(ev.Timeout(self._t(), "loot", self.cfg.run.loot_timeout_s))
             self._miss("The bobber did not go away after Interact")
 
     # -- helpers -----------------------------------------------------------------------------
+
+    def _caught(self, did: str) -> None:
+        self.stats = ev.Stats(
+            self._t(), self.stats.casts, self.stats.catches + 1, self.stats.misses,
+            self.stats.bites_heard, self._elapsed(),
+        )  # fmt: skip
+        self._emit(ev.Caught(self._t()))
+        self._pause_then_idle(did, may_move=True)
 
     def _track(self, now: float) -> bool | None:
         """Grab the box around the icon (at most every box_interval_s) and look for it there.
