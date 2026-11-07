@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import ntpath
 import sys
 from typing import Any
 
-from wowfish.capture import Box, WindowRef
+from wowfish.capture import Box, WindowRef, window_matches
 
 
 def client_rect_to_box(left: int, top: int, right: int, bottom: int, sx: int, sy: int) -> Box:
@@ -39,7 +40,27 @@ def find_window_win32(title_substring: str) -> WindowRef | None:
     user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
     user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
     user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
-    wanted = title_substring.lower()
+    kernel32: Any = ctypes.windll.kernel32
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.QueryFullProcessImageNameW.argtypes = [
+        wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)
+    ]  # fmt: skip
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+    def exe_of(pid: int) -> str:
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(1024)
+            size = wintypes.DWORD(len(buf))
+            if not kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                return ""
+            return ntpath.basename(buf.value)
+        finally:
+            kernel32.CloseHandle(handle)
+
     found: list[WindowRef] = []
     proto = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
@@ -52,7 +73,9 @@ def find_window_win32(title_substring: str) -> WindowRef | None:
         buf = ctypes.create_unicode_buffer(n + 1)
         user32.GetWindowTextW(hwnd, buf, n + 1)
         title = buf.value
-        if wanted not in title.lower():
+        pid = wintypes.DWORD(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if not window_matches(title, exe_of(pid.value), title_substring):
             return True
         rect = wintypes.RECT()
         if not user32.GetClientRect(hwnd, ctypes.byref(rect)):
@@ -62,8 +85,6 @@ def find_window_win32(title_substring: str) -> WindowRef | None:
         x, y, w, h = client_rect_to_box(
             rect.left, rect.top, rect.right, rect.bottom, origin.x, origin.y
         )
-        pid = wintypes.DWORD(0)
-        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         found.append(WindowRef(title, int(pid.value) or None, x, y, w, h, handle=int(hwnd)))
         return True
 

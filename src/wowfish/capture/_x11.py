@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from wowfish.capture import Box, WindowRef
+from wowfish.capture import Box, WindowRef, window_matches
 from wowfish.errors import NotSupported
 
 _ZPIXMAP = 2
@@ -101,7 +101,6 @@ def find_window_x11(title_substring: str) -> WindowRef | None:
         root = d.screen().root
         name_atom = d.intern_atom("_NET_WM_NAME")
         pid_atom = d.intern_atom("_NET_WM_PID")
-        wanted = title_substring.lower()
         matches: list[tuple[WindowRef, list[int]]] = []  # (ref, ancestor ids)
 
         def title_of(w: Any) -> str:
@@ -116,10 +115,17 @@ def find_window_x11(title_substring: str) -> WindowRef | None:
             except Exception:
                 return ""
 
+        def exe_of(w: Any) -> str:
+            # Wine names a window's WM_CLASS after its executable, e.g. ("wow.exe", "Wow.exe").
+            try:
+                return (w.get_wm_class() or ("",))[0]
+            except Exception:
+                return ""
+
         def visit(w: Any, ancestors: list[int]) -> None:
             for child in w.query_tree().children:
                 title = title_of(child)
-                if title and wanted in title.lower():
+                if title and window_matches(title, exe_of(child), title_substring):
                     try:
                         attrs = child.get_attributes()
                         geo = child.get_geometry()
