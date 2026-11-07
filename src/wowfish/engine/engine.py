@@ -250,6 +250,15 @@ class FishingEngine:
                 self.stats.bites_heard + 1, self._elapsed(),
             )  # fmt: skip
             self._emit(ev.BiteHeard(self._t(), bite.clip, float(bite.score)))
+            r = self.cfg.run
+            delay = (
+                self._rng.uniform(r.reaction_min_s, r.reaction_max_s) if r.reaction_max_s else 0.0
+            )
+            if delay:
+                self._doze(delay)
+                if self._stop:
+                    return
+                now = self._clock()
             if self.input.is_game_focused(self.window) is False:
                 self._resume_state = State.WAIT_BITE
                 self.state = State.PAUSED
@@ -263,9 +272,10 @@ class FishingEngine:
             self._press(key, "bite")
             self._t_interact = now
             self._last_box_grab = -math.inf
+            waited = f", waited {delay:.2f} s" if delay else ""
             self._change(
                 State.INTERACT,
-                f"Heard the splash ({bite.score:.2f}), pressed {key}",
+                f"Heard the splash ({bite.score:.2f}){waited}, pressed {key}",
                 "Waiting for the bobber to go away so Auto Loot can finish",
             )
             return
@@ -340,7 +350,10 @@ class FishingEngine:
             nxt = f"Taking a break; casting again in {pause:.0f} s"
         self._change(State.IDLE, did, nxt)
         self._icon_xy = None
-        remaining = pause
+        self._doze(pause)
+
+    def _doze(self, seconds: float) -> None:
+        remaining = seconds
         while remaining > 0 and not self._stop and not self._session_over():
             step = min(SLEEP_SLICE_S, remaining)
             self._sleep(step)

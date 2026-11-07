@@ -69,6 +69,8 @@ class RunConfig:
     break_chance: float = 0.0
     break_min_s: float = 60.0
     break_max_s: float = 300.0
+    reaction_min_s: float = 0.0
+    reaction_max_s: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -178,6 +180,14 @@ def _validate(path: Path, cfg: Config) -> None:
     check(0.0 <= r.break_chance <= 1.0, "run.break_chance", "must be in [0, 1]")
     check(r.break_min_s >= 0, "run.break_min_s", "must be 0 or positive")
     check(r.break_min_s <= r.break_max_s, "run.break_min_s", "must not exceed run.break_max_s")
+    check(r.reaction_min_s >= 0, "run.reaction_min_s", "must be 0 or positive")
+    check(
+        r.reaction_min_s <= r.reaction_max_s,
+        "run.reaction_min_s",
+        "must not exceed run.reaction_max_s",
+    )
+    # The bobber can only be looted for a few seconds after the splash.
+    check(r.reaction_max_s <= 2.0, "run.reaction_max_s", "must be 2.0 or less")
 
 
 def to_toml(cfg: Config) -> str:
