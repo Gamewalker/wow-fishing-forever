@@ -40,3 +40,5 @@ pause_min_s = 0.5
 pause_max_s = 2.0
 # How long each key is held down, in milliseconds.
 key_hold_ms = 60
+# Vary each hold by up to this many milliseconds either way (0 = always exactly key_hold_ms).
+key_hold_jitter_ms = 0

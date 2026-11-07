@@ -314,7 +314,10 @@ class FishingEngine:
         return False
 
     def _press(self, key: str, why: str) -> None:
-        self.input.press_key(key, self.cfg.run.key_hold_ms / 1000.0)
+        hold_ms = self.cfg.run.key_hold_ms
+        if jitter := self.cfg.run.key_hold_jitter_ms:
+            hold_ms = min(max(hold_ms + self._rng.uniform(-jitter, jitter), 10), 500)
+        self.input.press_key(key, hold_ms / 1000.0)
         self._emit(ev.KeyPressed(self._t(), key, why))
 
     def _miss(self, did: str) -> None:

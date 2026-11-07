@@ -1,4 +1,4 @@
-"""Six checks that protect what the bot actually relies on: the shipped assets, the default
+"""Seven checks that protect what the bot actually relies on: the shipped assets, the default
 config, logging in the console-less GUI executable, and that the two detectors say yes to the
 real thing and no to nothing.
 
@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 from loguru import logger
 
 from wowfish.assets import CLIP_NAMES, ICON_SIZES
@@ -24,12 +25,16 @@ from wowfish.cli import _setup_logging
 from wowfish.config import (
     AudioConfig,
     Config,
+    ConfigError,
     GameConfig,
+    RunConfig,
     VisionConfig,
+    _validate,
     ensure_config_file,
     load_config,
     save_config,
 )
+from wowfish.engine.engine import FishingEngine
 from wowfish.vision.matcher import IconMatcher
 from wowfish.vision.template import load_icon_templates, template_for_size
 
@@ -148,3 +153,42 @@ def test_icon_matcher_finds_sprite_and_rejects_water():
 
             miss = IconMatcher(t).match(water)
             assert not miss.accepted(threshold), (frame_w, size, miss)
+
+
+def test_key_hold_jitter_varies_presses_within_bounds():
+    """key_hold_jitter_ms varies each hold around key_hold_ms, clamped to 10..500 ms; at 0 it
+    leaves the hold exact and draws nothing from the rng, so the pause sequence is unchanged."""
+
+    class Keys:
+        def __init__(self):
+            self.holds = []
+
+        def press_key(self, key, hold_s):
+            self.holds.append(hold_s)
+
+    class Rng:
+        def __init__(self, *draws):
+            self.draws = list(draws)
+
+        def uniform(self, lo, hi):
+            return self.draws.pop(0)
+
+    def holds(run, rng):
+        cfg = Config(GameConfig(), VisionConfig(), AudioConfig(), run)
+        keys = Keys()
+        engine = FishingEngine(
+            cfg, None, capturer=None, input_device=keys, audio_source=None, detector=None, rng=rng
+        )
+        for _ in range(len(rng.draws) or 1):
+            engine._press("1", "cast")
+        return keys.holds
+
+    assert holds(RunConfig(key_hold_ms=60), Rng()) == [0.06]
+    assert holds(RunConfig(key_hold_ms=60, key_hold_jitter_ms=30), Rng(-30, 25)) == [0.03, 0.085]
+    assert holds(RunConfig(key_hold_ms=20, key_hold_jitter_ms=50), Rng(-50)) == [0.01]
+    assert holds(RunConfig(key_hold_ms=480, key_hold_jitter_ms=50), Rng(50)) == [0.5]
+
+    for bad in (-1, 201):
+        cfg = Config(GameConfig(), VisionConfig(), AudioConfig(), RunConfig(key_hold_jitter_ms=bad))
+        with pytest.raises(ConfigError, match="key_hold_jitter_ms"):
+            _validate(Path("config.toml"), cfg)
