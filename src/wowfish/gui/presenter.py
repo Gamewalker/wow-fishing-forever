@@ -42,6 +42,8 @@ def describe(event: ev.Event) -> str:
             return f"Heard the splash ({score:.2f}, {clip})"
         case ev.KeyPressed(key=key, why="cast"):
             return f"Pressed {key} to cast"
+        case ev.KeyPressed(key=key, why="move"):
+            return f"Held {key} to take a small step"
         case ev.KeyPressed(key=key):
             return f"Pressed {key} to interact"
         case ev.Caught():

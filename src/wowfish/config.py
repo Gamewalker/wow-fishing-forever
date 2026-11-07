@@ -12,6 +12,7 @@ import tomli_w
 
 from wowfish import paths
 from wowfish.assets import default_config_path
+from wowfish.input import keys
 
 _LINE_RE = re.compile(r"\(at line (\d+), column \d+\)")
 
@@ -71,6 +72,9 @@ class RunConfig:
     break_max_s: float = 300.0
     reaction_min_s: float = 0.0
     reaction_max_s: float = 0.0
+    move_chance: float = 0.0
+    move_keys: str = "q,e"
+    move_max_ms: int = 300
 
 
 @dataclass(frozen=True)
@@ -188,6 +192,14 @@ def _validate(path: Path, cfg: Config) -> None:
     )
     # The bobber can only be looted for a few seconds after the splash.
     check(r.reaction_max_s <= 2.0, "run.reaction_max_s", "must be 2.0 or less")
+    check(0.0 <= r.move_chance <= 1.0, "run.move_chance", "must be in [0, 1]")
+    move = [keys.normalize_key(k) for k in r.move_keys.split(",")]
+    check(
+        len(move) == 2 and len(set(move)) == 2 and all(map(keys.is_supported_key, move)),
+        "run.move_keys",
+        'must be two different supported keys, like "q,e"',
+    )
+    check(50 <= r.move_max_ms <= 1000, "run.move_max_ms", "must be between 50 and 1000")
 
 
 def to_toml(cfg: Config) -> str:

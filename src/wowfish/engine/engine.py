@@ -298,7 +298,7 @@ class FishingEngine:
                 self.stats.bites_heard, self._elapsed(),
             )  # fmt: skip
             self._emit(ev.Caught(self._t()))
-            self._pause_then_idle("Caught something; the bobber is gone")
+            self._pause_then_idle("Caught something; the bobber is gone", may_move=True)
             return
         if now - self._t_interact > self.cfg.run.loot_timeout_s:
             self._emit(ev.Timeout(self._t(), "loot", self.cfg.run.loot_timeout_s))
@@ -327,11 +327,13 @@ class FishingEngine:
         self._misses += 1
         return False
 
-    def _press(self, key: str, why: str) -> None:
-        hold_ms = self.cfg.run.key_hold_ms
-        if jitter := self.cfg.run.key_hold_jitter_ms:
-            hold_ms = min(max(hold_ms + self._rng.uniform(-jitter, jitter), 10), 500)
-        self.input.press_key(key, hold_ms / 1000.0)
+    def _press(self, key: str, why: str, hold_s: float | None = None) -> None:
+        if hold_s is None:
+            hold_ms = self.cfg.run.key_hold_ms
+            if jitter := self.cfg.run.key_hold_jitter_ms:
+                hold_ms = min(max(hold_ms + self._rng.uniform(-jitter, jitter), 10), 500)
+            hold_s = hold_ms / 1000.0
+        self.input.press_key(key, hold_s)
         self._emit(ev.KeyPressed(self._t(), key, why))
 
     def _miss(self, did: str) -> None:
@@ -341,15 +343,21 @@ class FishingEngine:
         )  # fmt: skip
         self._pause_then_idle(did)
 
-    def _pause_then_idle(self, did: str) -> None:
+    def _pause_then_idle(self, did: str, *, may_move: bool = False) -> None:
         r = self.cfg.run
         pause = self._rng.uniform(r.pause_min_s, r.pause_max_s)
         nxt = f"Casting again in {pause:.1f} s"
         if r.break_chance > 0 and self._rng.random() < r.break_chance:
             pause += self._rng.uniform(r.break_min_s, r.break_max_s)
             nxt = f"Taking a break; casting again in {pause:.0f} s"
+        # Only after a catch: then the bobber is surely gone, so a step cannot cancel a cast.
+        move = may_move and r.move_chance > 0 and self._rng.random() < r.move_chance
+        if move:
+            nxt += " after a small step"
         self._change(State.IDLE, did, nxt)
         self._icon_xy = None
+        if move:
+            self._step_and_back()
         self._doze(pause)
 
     def _doze(self, seconds: float) -> None:
@@ -361,6 +369,16 @@ class FishingEngine:
 
     def _session_over(self) -> bool:
         return self.session_s != 0 and self._elapsed() >= self.session_s
+
+    def _step_and_back(self) -> None:
+        """Hold one key, then the other for as long, so the character ends where it started."""
+        if self._stop:
+            return  # checked once up front: stopping halfway would leave the character moved
+        hold_s = self._rng.uniform(self.cfg.run.move_max_ms / 2, self.cfg.run.move_max_ms) / 1000
+        for key in self.cfg.run.move_keys.split(","):
+            if self.input.is_game_focused(self.window) is False:
+                return  # never send a movement key to another window
+            self._press(key.strip(), "move", hold_s)
 
     def _drain_audio(self, now: float) -> list[AudioChunk]:
         rate = self.audio.sample_rate

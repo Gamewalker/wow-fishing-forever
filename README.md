@@ -139,6 +139,8 @@ This bot looks at pixels and listens to sound, and it presses the keys to cast a
 range. If you do not see the gold gear sprite above the bobber, that means the bobber is out of range for the interact key to work, so the bot will recast. The bot will scan for the sprite using template matching from OpenCV, and it matches it against the game window with a masked, mean-subtracted template match. If it doesn't find it, it will recast until it does. 
 3. **Detect bite**: WoW plays one of its splash clips when a fish bites. The bot fingerprints the first 0.8 seconds of each as a log-mel spectrogram with the gain removed. If there's a match, the bot will simulate the interact key, and auto-loot should pick up your fish. Set `reaction_min_s` and `reaction_max_s` under `[run]` to wait a random time (at most 2 seconds) between hearing the splash and pressing the interact key; both are 0 by default. Set `skip_bite_chance` under `[run]` (default `0.0`) to let that fraction of bites go on purpose; each skip counts as a miss. After all that, the bot recasts, optionally taking a break first (`break_chance`, `break_min_s`, `break_max_s` in the config).
 
+Optionally, after a catch the bot can take a small step and back before recasting: set `move_chance` (0 to 1, default 0 = never) in the `[run]` section. It holds the first of `move_keys` (default `"q,e"`, WoW's strafe left/right) for a random time up to `move_max_ms` (default 300), then the second for just as long, so the character ends where it started. It never moves while a bobber is out or when the game is not focused.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
