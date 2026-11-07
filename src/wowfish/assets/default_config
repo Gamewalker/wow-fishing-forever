@@ -42,3 +42,6 @@ pause_max_s = 2.0
 key_hold_ms = 60
 # Vary each hold by up to this many milliseconds either way (0 = always exactly key_hold_ms).
 key_hold_jitter_ms = 0
+# Chance (0 to just below 1) of letting a heard bite go on purpose, like a person who
+# looked away. 0 = always press Interact.
+skip_bite_chance = 0.0

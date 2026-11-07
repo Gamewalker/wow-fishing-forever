@@ -255,6 +255,10 @@ class FishingEngine:
                 self.state = State.PAUSED
                 self._emit(ev.Paused(self._t(), UNFOCUSED))
                 return
+            chance = self.cfg.run.skip_bite_chance
+            if chance > 0 and self._rng.random() < chance:
+                self._miss(f"Heard the splash ({bite.score:.2f}), skipped it on purpose")
+                return
             key = self.cfg.game.interact_key
             self._press(key, "bite")
             self._t_interact = now

@@ -8,8 +8,10 @@ system, or Tk is touched, so a failure means the code or the assets changed, not
 
 from __future__ import annotations
 
+import random
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +23,7 @@ from wowfish.audio import AudioChunk
 from wowfish.audio.clips import build_fingerprints, load_reference_clips
 from wowfish.audio.detector import BiteDetector, BiteEvent, detector_for
 from wowfish.audio.features import DEFAULT_MEL
+from wowfish.capture import WindowRef
 from wowfish.cli import _setup_logging
 from wowfish.config import (
     AudioConfig,
@@ -34,7 +37,9 @@ from wowfish.config import (
     load_config,
     save_config,
 )
+from wowfish.engine import events as ev
 from wowfish.engine.engine import FishingEngine
+from wowfish.engine.state import State
 from wowfish.vision.matcher import IconMatcher
 from wowfish.vision.template import load_icon_templates, template_for_size
 
@@ -192,3 +197,58 @@ def test_key_hold_jitter_varies_presses_within_bounds():
         cfg = Config(GameConfig(), VisionConfig(), AudioConfig(), RunConfig(key_hold_jitter_ms=bad))
         with pytest.raises(ConfigError, match="key_hold_jitter_ms"):
             _validate(Path("config.toml"), cfg)
+
+
+def test_skip_bite_chance_must_be_below_one(tmp_path):
+    path = tmp_path / "config.toml"
+    ensure_config_file(path)
+    cfg, _ = load_config(path)
+    for chance, ok in ((0.0, True), (0.3, True), (1.0, False), (-0.1, False)):
+        save_config(replace(cfg, run=RunConfig(skip_bite_chance=chance)), path)
+        try:
+            load_config(path)
+            assert ok, chance
+        except ConfigError:
+            assert not ok, chance
+
+
+class _Keys:
+    def __init__(self) -> None:
+        self.pressed: list[str] = []
+
+    def press_key(self, key: str, hold_s: float = 0.06) -> None:
+        self.pressed.append(key)
+
+    def is_game_focused(self, window: WindowRef) -> bool | None:
+        return True
+
+
+def _hear_bite(skip_bite_chance: float, roll: float) -> tuple[FishingEngine, _Keys]:
+    rng = random.Random()
+    rng.random = lambda: roll  # type: ignore[method-assign]
+    keys = _Keys()
+    run = RunConfig(skip_bite_chance=skip_bite_chance)
+    cfg = Config(GameConfig(), VisionConfig(), AudioConfig(), run)
+    engine = FishingEngine(
+        cfg, WindowRef("WoW", None, 0, 0, 800, 600), capturer=None, input_device=keys,
+        audio_source=None, detector=None, sleep=lambda s: None, rng=rng,
+    )  # fmt: skip
+    engine.state = State.WAIT_BITE
+    engine._wait_bite(0.0, [BiteEvent("splash", 0.9, 0.0)])
+    return engine, keys
+
+
+def test_skipped_bite_counts_as_heard_and_missed_without_pressing():
+    engine, keys = _hear_bite(0.5, roll=0.2)
+    assert keys.pressed == []
+    assert engine.state is State.IDLE
+    assert (engine.stats.bites_heard, engine.stats.misses, engine.stats.catches) == (1, 1, 0)
+    events = []
+    while not engine.events.empty():
+        events.append(engine.events.get())
+    assert any(isinstance(e, ev.BiteHeard) for e in events)
+    assert any(isinstance(e, ev.StateChanged) and "on purpose" in e.did for e in events)
+
+    engine, keys = _hear_bite(0.5, roll=0.7)
+    assert keys.pressed == [engine.cfg.game.interact_key]
+    assert engine.state is State.INTERACT
