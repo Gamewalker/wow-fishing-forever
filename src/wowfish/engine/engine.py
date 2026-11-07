@@ -126,7 +126,7 @@ class FishingEngine:
         if self._stop:
             self._finish("user")
             return
-        if self.session_s != 0 and now - self.started >= self.session_s:
+        if self._session_over():
             self._finish("session limit")
             return
         try:
@@ -332,14 +332,22 @@ class FishingEngine:
         self._pause_then_idle(did)
 
     def _pause_then_idle(self, did: str) -> None:
-        pause = self._rng.uniform(self.cfg.run.pause_min_s, self.cfg.run.pause_max_s)
-        self._change(State.IDLE, did, f"Casting again in {pause:.1f} s")
+        r = self.cfg.run
+        pause = self._rng.uniform(r.pause_min_s, r.pause_max_s)
+        nxt = f"Casting again in {pause:.1f} s"
+        if r.break_chance > 0 and self._rng.random() < r.break_chance:
+            pause += self._rng.uniform(r.break_min_s, r.break_max_s)
+            nxt = f"Taking a break; casting again in {pause:.0f} s"
+        self._change(State.IDLE, did, nxt)
         self._icon_xy = None
         remaining = pause
-        while remaining > 0 and not self._stop:
+        while remaining > 0 and not self._stop and not self._session_over():
             step = min(SLEEP_SLICE_S, remaining)
             self._sleep(step)
             remaining -= step
+
+    def _session_over(self) -> bool:
+        return self.session_s != 0 and self._elapsed() >= self.session_s
 
     def _drain_audio(self, now: float) -> list[AudioChunk]:
         rate = self.audio.sample_rate
