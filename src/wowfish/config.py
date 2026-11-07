@@ -34,6 +34,7 @@ class GameConfig:
     cast_key: str = "1"
     interact_key: str = "f"
     session_minutes: int = 0
+    addon_mode: bool = False  # one key casts and reels in (Better Fishing style); no icon search
 
 
 @dataclass(frozen=True)
