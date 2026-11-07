@@ -134,7 +134,7 @@ Add `--verbose` before any command for debug logging. `doctor` prints the log fi
 
 This bot looks at pixels and listens to sound, and it presses the keys to cast and loot. It does not read memory, inject code, inject network traffic, or rely on an addon.
 
-1. **Cast**: It casts using your specified cast key. Each key press is simulated with a `key_hold_ms` timer.
+1. **Cast**: It casts using your specified cast key. Each key press is simulated with a `key_hold_ms` timer, optionally varied by up to `key_hold_jitter_ms` either way.
 2. **Detect bobber**: WoW draws a gold gear sprite over the bobber when it is in interact
 range. If you do not see the gold gear sprite above the bobber, that means the bobber is out of range for the interact key to work, so the bot will recast. The bot will scan for the sprite using template matching from OpenCV, and it matches it against the game window with a masked, mean-subtracted template match. If it doesn't find it, it will recast until it does. 
 3. **Detect bite**: WoW plays one of its splash clips when a fish bites. The bot fingerprints the first 0.8 seconds of each as a log-mel spectrogram with the gain removed. If there's a match, the bot will simulate the interact key, and auto-loot should pick up your fish. After all that, the bot recasts.
